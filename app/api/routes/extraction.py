@@ -1,12 +1,16 @@
 import cv2
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+# Services
 from app.services.line_detector import detect_lines
 from app.services.margin_detector import detect_external_margin
 from app.services.ocr import get_ocr_provider
 from app.services.preprocessor import load_image, preprocess
 from app.services.reconciler import reconcile
 from app.services.text_block import detect_text_block
+
+# Utils
+from app.services.logger import logger
 from app.services.matplot_utils import plot_image
 
 router = APIRouter()
@@ -50,6 +54,7 @@ async def extract(image: UploadFile = File(...)) -> dict:
             if y_bottom <= y_top:
                 continue
             region = gray[y_top:y_bottom + 1, x_left:x_right + 1]
+            logger.debug(f"Region: {region.shape}")
             if region.size == 0:
                 continue
             text = ocr.extract_text(region)
