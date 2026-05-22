@@ -6,3 +6,4 @@ __pycache__/
 .tesseract-3.02.02/
 SPEC.md
 debug/
+resources/log/
