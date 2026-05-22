@@ -23,6 +23,14 @@ uv run book-extractor
 uv run uvicorn app.main:app --reload
 ```
 
+### Solución errores import open cv 
+
+```bash
+uv sync --extra dev
+```
+Ctrl+Shift+P → "Python: Select Interpreter" → elegir .venv\Scripts\python.exe.
+Ctrl+Shift+P → "Developer: Reload Window"
+
 La API queda en `http://localhost:8000` y expone `POST /extract` y `GET /health`.
 
 ## Tests
