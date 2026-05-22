@@ -1,0 +1,8 @@
+.env
+.venv
+__pycache__/
+*.pycs
+.claude
+.tesseract-3.02.02/
+SPEC.md
+debug/
