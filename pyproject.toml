@@ -18,6 +18,7 @@ dependencies = [
     "google-cloud-vision>=3.7",
     "python-dotenv>=1.0",
     "matplotlib>=3.8",
+    "loguru>=0.7",
 ]
 
 [project.optional-dependencies]

@@ -26,16 +26,20 @@ async def extract(image: UploadFile = File(...)) -> dict:
 
     try:
         binary = preprocess(bgr)
-        plot_image(binary, "binary")
+        # plot_image(binary, "1. binary")
         text_block = detect_text_block(binary)
+        # plot_image(binary, "2. text_block")
         side = detect_external_margin(binary, text_block)
+        # plot_image(binary, "3. side")
         candidates = detect_lines(binary, side, text_block)
+        # plot_image(binary, "4. candidates")
         fragments_y = reconcile(candidates)
-
+        # plot_image(binary, "5. fragments")
         ocr = get_ocr_provider()
-
+        # plot_image(binary, "6. ocr")
         gray = bgr if bgr.ndim == 2 else cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-        plot_image(gray, "gray")
+        # plot_image(gray, "7. gray")
+        
         x_left = text_block["x_left"]
         x_right = text_block["x_right"]
 

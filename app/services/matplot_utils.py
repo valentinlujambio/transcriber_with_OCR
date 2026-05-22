@@ -1,12 +1,15 @@
-import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 import matplotlib
+import matplotlib.pyplot as plt
 
 matplotlib.use("Agg")
 
 
 def plot_image(image: np.ndarray, title: str) -> None:
+    """
+    Plota una imagen y la guarda en el directorio debug para debugging.
+    """
     
     debug_path = Path("debug") / f"{title}.png"
     debug_path.parent.mkdir(parents=True, exist_ok=True)
