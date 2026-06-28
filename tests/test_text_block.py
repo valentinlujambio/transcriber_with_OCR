@@ -1,11 +1,10 @@
-from app.services.preprocessor import preprocess
 from app.services.text_block import detect_text_block
-from tests.synthetic import page_with_text_block
+from tests.synthetic import legacy_binary, page_with_text_block
 
 
 def test_detect_text_block_finds_expected_x_range():
     img = page_with_text_block(text_x_left=120, text_x_right=480)
-    binary = preprocess(img)
+    binary = legacy_binary(img)
 
     block = detect_text_block(binary)
 

@@ -2,16 +2,13 @@ import cv2
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 # Services
-from app.services.line_detector import detect_lines
-from app.services.margin_detector import detect_external_margin
-from app.services.ocr import get_ocr_provider
-from app.services.preprocessor import load_image, preprocess
-from app.services.reconciler import reconcile
-from app.services.text_block import detect_text_block
+from app.services.mark_detector import detect_marks
+from app.services.page_detector import crop_to_page
+from app.services.preprocessor import binarize, enhance, load_image
 
 # Utils
 from app.services.logger import logger
-from app.services.matplot_utils import plot_image
+from app.services.matplot_utils import debug_plotter
 
 router = APIRouter()
 
@@ -29,38 +26,37 @@ async def extract(image: UploadFile = File(...)) -> dict:
         raise HTTPException(status_code=422, detail=f"Imagen inválida: {exc}") from exc
 
     try:
-        binary = preprocess(bgr)
-        # plot_image(binary, "1. binary")
-        text_block = detect_text_block(binary)
-        # plot_image(binary, "2. text_block")
-        side = detect_external_margin(binary, text_block)
-        # plot_image(binary, "3. side")
-        candidates = detect_lines(binary, side, text_block)
-        # plot_image(binary, "4. candidates")
-        fragments_y = reconcile(candidates)
-        # plot_image(binary, "5. fragments")
-        ocr = get_ocr_provider()
-        # plot_image(binary, "6. ocr")
-        gray = bgr if bgr.ndim == 2 else cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-        # plot_image(gray, "7. gray")
-        
-        x_left = text_block["x_left"]
-        x_right = text_block["x_right"]
+        # Paso previo: recortar el ROI de la pagina de interes (saca escritorio,
+        # dedos, la otra pagina, fondo, etc.)
+        page = crop_to_page(bgr)
+        debug_plotter.plot_image(cv2.cvtColor(page, cv2.COLOR_BGR2RGB), "0. page_roi")
 
-        fragments: list[dict] = []
-        for frag in fragments_y:
-            y_top = max(0, frag["y_top"])
-            y_bottom = min(gray.shape[0] - 1, frag["y_bottom"])
-            if y_bottom <= y_top:
-                continue
-            region = gray[y_top:y_bottom + 1, x_left:x_right + 1]
-            logger.debug(f"Region: {region.shape}")
-            if region.size == 0:
-                continue
-            text = ocr.extract_text(region)
-            fragments.append({"y_top": y_top, "y_bottom": y_bottom, "text": text})
+        # Paso 1: mayor resolucion + CLAHE + binarizacion adaptativa
+        gray = enhance(page)
+        binary = binarize(gray)
+        debug_plotter.plot_image(gray, "1. enhanced")
+        debug_plotter.plot_image(binary, "2. binary")
 
-        return {"fragments": fragments}
+        # Paso 2: deteccion de subrayados y corchetes
+        marks = detect_marks(binary)
+        underlines = marks["underlines"]
+        brackets = marks["brackets"]
+        logger.debug(f"Subrayados: {len(underlines)} | Corchetes: {len(brackets)}")
+
+        def rects(items: list[dict]) -> list[tuple[int, int, int, int]]:
+            return [(m["x"], m["y"], m["w"], m["h"]) for m in items]
+
+        debug_plotter.plot_marks(
+            gray,
+            [(rects(underlines), "red"), (rects(brackets), "lime")],
+            "3. marks",
+        )
+
+        return {
+            "underlines": underlines,
+            "brackets": brackets,
+        }
+        # TODO (paso 3-5): mascaras -> ROI -> mejora de binarizacion -> OCR
     except HTTPException:
         raise
     except Exception as exc:
