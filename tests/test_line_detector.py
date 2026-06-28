@@ -1,13 +1,12 @@
 from app.services.line_detector import detect_lines
-from app.services.preprocessor import preprocess
 from app.services.text_block import detect_text_block
-from tests.synthetic import add_bracket, page_with_text_block
+from tests.synthetic import add_bracket, legacy_binary, page_with_text_block
 
 
 def test_detect_lines_finds_bracket_range():
     img = page_with_text_block(width=600, height=800, text_x_left=120, text_x_right=480)
     img = add_bracket(img, y_top=200, y_bottom=320, x=540, side="right", thickness=4)
-    binary = preprocess(img)
+    binary = legacy_binary(img)
     block = detect_text_block(binary)
 
     candidates = detect_lines(binary, "right", block)
@@ -22,7 +21,7 @@ def test_detect_lines_finds_bracket_range():
 
 def test_detect_lines_returns_empty_on_blank_strip():
     img = page_with_text_block(width=600, height=800)
-    binary = preprocess(img)
+    binary = legacy_binary(img)
     block = detect_text_block(binary)
 
     candidates = detect_lines(binary, "right", block)
