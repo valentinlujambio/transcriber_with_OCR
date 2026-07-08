@@ -52,6 +52,32 @@ def _text_blocks(gray: np.ndarray) -> list[tuple[int, int, int, int, int]]:
     return boxes
 
 
+def detect_spine(gray: np.ndarray) -> int | None:
+    """Detecta el lomo del libro
+    """
+    sh, sw = gray.shape
+    y0, y1 = int(sh * config.PAGE_SPINE_BAND), int(sh * (1 - config.PAGE_SPINE_BAND))
+    band = gray[y0:y1, :].astype(np.float32)
+    col = np.percentile(band, 80, axis=0)
+    col = cv2.GaussianBlur(col.reshape(1, -1), (0, 0), 4).ravel()
+
+    flank = max(int(sw * config.PAGE_SPINE_FLANK), 8)
+    lo, hi = int(sw * 0.10), int(sw * 0.90)
+    best_x, best_valley = None, 0.0
+    for x in range(lo, hi):
+        left = col[max(0, x - 2 * flank):x - flank].mean() if x - flank > 0 else 0.0
+        right = col[x + flank:x + 2 * flank].mean() if x + flank < sw else 0.0
+        if min(left, right) < config.PAGE_SPINE_FLANK_MIN:  # ambos lados deben ser pagina
+            continue
+        valley = float(min(left, right) - col[x])
+        if valley > best_valley:
+            best_x, best_valley = x, valley
+
+    if best_x is None or best_valley < config.PAGE_SPINE_MIN_VALLEY:
+        return None
+    return best_x
+
+
 def detect_page_bbox(bgr: np.ndarray) -> Bbox | None:
     """Devuelve el bbox (x0, y0, x1, y1) de la pagina de interes en coords
     de la imagen original, o None si no se detecta texto."""
@@ -91,6 +117,18 @@ def detect_page_bbox(bgr: np.ndarray) -> Bbox | None:
     y0 = max(0, y - pad_y)
     x1 = min(sw, x + w + pad_r)
     y1 = min(sh, y + h + pad_y)
+
+    # Recortar en el lomo para no invadir la pagina vecina. La pagina de
+    # interes es el lado del lomo donde cae el centro del bloque de texto
+    # principal; se entra un poco (PAGE_SPINE_MARGIN) para saltear la sombra
+    # oscura de la encuadernacion.
+    spine = detect_spine(gray)
+    if spine is not None:
+        off = int(sw * config.PAGE_SPINE_MARGIN)
+        if x + w / 2 > spine:        # pagina a la derecha del lomo
+            x0 = max(x0, spine + off)
+        else:                        # pagina a la izquierda del lomo
+            x1 = min(x1, spine - off)
 
     inv = 1.0 / scale
     return (int(x0 * inv), int(y0 * inv), int(x1 * inv), int(y1 * inv))

@@ -2,7 +2,8 @@ import cv2
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 # Services
-from app.services.mark_detector import detect_marks
+from app.services.mark_detector import detect_marks, extract_marked_paragraph
+from app.services.ocr import get_ocr_provider
 from app.services.page_detector import crop_to_page
 from app.services.preprocessor import binarize, enhance, load_image
 
@@ -26,18 +27,17 @@ async def extract(image: UploadFile = File(...)) -> dict:
         raise HTTPException(status_code=422, detail=f"Imagen inválida: {exc}") from exc
 
     try:
-        # Paso previo: recortar el ROI de la pagina de interes (saca escritorio,
-        # dedos, la otra pagina, fondo, etc.)
+        # Paso 1: ROI de la página
         page = crop_to_page(bgr)
-        debug_plotter.plot_image(cv2.cvtColor(page, cv2.COLOR_BGR2RGB), "0. page_roi")
+        debug_plotter.plot_image(cv2.cvtColor(page, cv2.COLOR_BGR2RGB), "1. page_roi")
 
-        # Paso 1: mayor resolucion + CLAHE + binarizacion adaptativa
+        # Paso 2: mayor resolucion + CLAHE + binarizacion adaptativa
         gray = enhance(page)
-        binary = binarize(gray)
-        debug_plotter.plot_image(gray, "1. enhanced")
-        debug_plotter.plot_image(binary, "2. binary")
+        binary = binarize(gray) #1|||||||||||||||||||||899999999 - Comentario de Junior
+        debug_plotter.plot_image(gray, "2. enhanced")
+        debug_plotter.plot_image(binary, "3. binary")
 
-        # Paso 2: deteccion de subrayados y corchetes
+        # Paso 3: deteccion de subrayados y corchetes
         marks = detect_marks(binary)
         underlines = marks["underlines"]
         brackets = marks["brackets"]
@@ -49,14 +49,32 @@ async def extract(image: UploadFile = File(...)) -> dict:
         debug_plotter.plot_marks(
             gray,
             [(rects(underlines), "red"), (rects(brackets), "lime")],
-            "3. marks",
+            "4. marks",
         )
+
+        # Paso 4: por cada corchete, seguir cada renglon marcado como cadena de
+        # componentes conectados hasta sus puntas -> recorte ajustado al parrafo
+        # (con lo de arriba/abajo blanqueado siguiendo la inclinacion). Se manda
+        # el recorte en gris (curvo) al OCR tal cual.
+        ocr = get_ocr_provider()
+        roi_boxes: list[tuple[int, int, int, int]] = []
+        results: list[dict] = []
+        for idx, bracket in enumerate(brackets):
+            roi, (x, y, w, h) = extract_marked_paragraph(gray, binary, bracket)
+            roi_boxes.append((x, y, w, h))
+            debug_plotter.plot_image(roi, f"5.{idx} roi")
+
+            text = ocr.extract_text(roi)
+            logger.debug(f"ROI {idx} ({bracket['side']}): {text!r}")
+            results.append({"bracket": bracket, "roi": {"x": x, "y": y, "w": w, "h": h}, "text": text})
+
+        debug_plotter.plot_marks(gray, [(roi_boxes, "cyan")], "5. rois")
 
         return {
             "underlines": underlines,
             "brackets": brackets,
+            "results": results,
         }
-        # TODO (paso 3-5): mascaras -> ROI -> mejora de binarizacion -> OCR
     except HTTPException:
         raise
     except Exception as exc:
